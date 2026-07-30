@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { aiParse } from "@/lib/parsers/ai";
 import { parsePdfText } from "@/lib/parsers/pdf";
+import { detectCurrencyFromText, type CurrencyCode } from "@/lib/currency";
 import type { Transaction } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -42,15 +43,19 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     let transactions: Transaction[] = [];
     let engine: "rules" | "ai" = "rules";
+    let currency: CurrencyCode | null = null;
 
     if (isPdf) {
       try {
         const { default: pdfParse } = await import("pdf-parse");
         const parsed = await pdfParse(buffer);
+        currency = detectCurrencyFromText(parsed.text ?? "");
         transactions = parsePdfText(parsed.text ?? "", statementId);
       } catch {
         transactions = []; // encrypted/scanned — AI fallback below
       }
+    } else {
+      currency = detectCurrencyFromText(buffer.toString("utf8").slice(0, 20_000));
     }
 
     // Fallback: unusual layout, scanned PDF, or a CSV/Excel the client couldn't read.
@@ -69,9 +74,10 @@ export async function POST(request: Request) {
         aiInput = { buffer, mediaType: "text/plain" };
       }
 
-      const aiRows = await aiParse(aiInput, statementId);
-      if (aiRows && aiRows.length) {
-        transactions = aiRows;
+      const ai = await aiParse(aiInput, statementId);
+      if (ai && ai.rows.length) {
+        transactions = ai.rows;
+        currency = ai.currency ?? currency;
         engine = "ai";
       } else if (!transactions.length) {
         const hasKey = Boolean(process.env.ANTHROPIC_API_KEY);
@@ -86,7 +92,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ transactions, engine });
+    return NextResponse.json({ transactions, engine, currency });
   } catch (err) {
     console.error("[/api/parse]", err);
     return NextResponse.json({ error: "Parsing failed unexpectedly. Try a CSV export from your bank." }, { status: 500 });

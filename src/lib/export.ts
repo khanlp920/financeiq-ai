@@ -6,6 +6,14 @@ import autoTable from "jspdf-autotable";
 import { categoryAggregates, computeKpis, merchantAggregates, monthlyAggregates } from "@/lib/finance";
 import { generateInsights, healthScore } from "@/lib/insights";
 import { fmtMoney, fmtPct } from "@/lib/utils";
+import { getCurrency } from "@/lib/currency";
+
+/** PDF-safe money: built-in PDF fonts lack ৳/₹/etc glyphs, so use the ISO code. */
+function pdfMoney(n: number): string {
+  if (!Number.isFinite(n)) return `0 ${getCurrency()}`;
+  const sign = n < 0 ? "-" : "";
+  return `${sign}${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 2 })} ${getCurrency()}`;
+}
 import type { Transaction } from "@/lib/types";
 
 /** ── CSV ────────────────────────────────────────────────────────────────── */
@@ -71,8 +79,8 @@ export function exportPdfReport(txns: Transaction[], fileName = "financeiq-repor
     styles: { fontSize: 9, cellPadding: 6 },
     headStyles: { fillColor: [16, 24, 40], textColor: 255 },
     head: [["Total Income", "Total Expense", "Net Savings", "Savings Rate", "Current Balance", "Monthly Burn"]],
-    body: [[fmtMoney(kpi.totalIncome), fmtMoney(kpi.totalExpense), fmtMoney(kpi.netSavings),
-            fmtPct(kpi.savingsRate, 1), fmtMoney(kpi.currentBalance), fmtMoney(kpi.monthlyBurnRate)]],
+    body: [[pdfMoney(kpi.totalIncome), pdfMoney(kpi.totalExpense), pdfMoney(kpi.netSavings),
+            fmtPct(kpi.savingsRate, 1), pdfMoney(kpi.currentBalance), pdfMoney(kpi.monthlyBurnRate)]],
   });
   y = lastY(doc) + 28;
 
@@ -83,7 +91,7 @@ export function exportPdfReport(txns: Transaction[], fileName = "financeiq-repor
     styles: { fontSize: 8.5, cellPadding: 5 },
     headStyles: { fillColor: [6, 95, 70], textColor: 255 },
     head: [["Month", "Income", "Expense", "Net", "End Balance"]],
-    body: months.map((m) => [m.label, fmtMoney(m.income), fmtMoney(m.expense), fmtMoney(m.net), m.endBalance != null ? fmtMoney(m.endBalance) : "—"]),
+    body: months.map((m) => [m.label, pdfMoney(m.income), pdfMoney(m.expense), pdfMoney(m.net), m.endBalance != null ? pdfMoney(m.endBalance) : "—"]),
   });
   y = lastY(doc) + 28;
 
@@ -100,7 +108,7 @@ export function exportPdfReport(txns: Transaction[], fileName = "financeiq-repor
     doc.setFillColor(6, 148, 100);
     doc.roundedRect(M + 110, by, Math.max(4, (c.total / maxV) * barW), 13, 3, 3, "F");
     doc.setTextColor(20, 26, 40);
-    doc.text(`${fmtMoney(c.total)}  ·  ${fmtPct(c.share)}`, M + 116 + (c.total / maxV) * barW, by + 10);
+    doc.text(`${pdfMoney(c.total)}  ·  ${fmtPct(c.share)}`, M + 116 + (c.total / maxV) * barW, by + 10);
   });
   y += top.length * 26 + 24;
 
@@ -112,7 +120,7 @@ export function exportPdfReport(txns: Transaction[], fileName = "financeiq-repor
     styles: { fontSize: 8.5, cellPadding: 5 },
     headStyles: { fillColor: [16, 24, 40], textColor: 255 },
     head: [["Merchant", "Category", "Transactions", "Total Spent"]],
-    body: merchants.map((m) => [m.merchant, m.category, String(m.count), fmtMoney(m.total)]),
+    body: merchants.map((m) => [m.merchant, m.category, String(m.count), pdfMoney(m.total)]),
   });
   y = lastY(doc) + 28;
 

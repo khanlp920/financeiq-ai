@@ -1,6 +1,8 @@
 "use client";
 import * as React from "react";
-import { CloudOff, Database, RefreshCcw, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Banknote, CloudOff, Database, RefreshCcw, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { CURRENCIES, type CurrencyCode } from "@/lib/currency";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useFinance } from "@/hooks/use-finance-store";
 import { supabaseConfigured } from "@/lib/supabase/client";
 import { Topbar } from "@/components/layout/topbar";
@@ -12,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 
 export default function SettingsPage() {
-  const { user, demoMode, transactions, statements, resetToDemo, clearAll } = useFinance();
+  const { user, demoMode, transactions, statements, resetToDemo, clearAll, currency, setCurrency } = useFinance();
   const [confirmClear, setConfirmClear] = React.useState(false);
   const configured = supabaseConfigured();
 
@@ -41,6 +43,29 @@ export default function SettingsPage() {
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground"><CloudOff className="h-4 w-4" /> {configured ? "Sign in to enable" : "Not configured"}</span>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base"><Banknote className="h-4 w-4" /> Currency</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">Display currency</span>
+              <Select value={currency} onValueChange={(v) => setCurrency(v as CurrencyCode)}>
+                <SelectTrigger className="w-52" aria-label="Display currency"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(CURRENCIES).map(([code, c]) => (
+                    <SelectItem key={code} value={code}>{c.symbol} {code} — {c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Auto-detected from uploaded statements; change it here if needed. Amounts are displayed
+              as-is — no exchange-rate conversion is applied.
+            </p>
           </CardContent>
         </Card>
 

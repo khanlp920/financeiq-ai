@@ -7,6 +7,7 @@ import { useFinance } from "@/hooks/use-finance-store";
 import { cn, uid } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import type { StatementFile, Transaction } from "@/lib/types";
+import type { CurrencyCode } from "@/lib/currency";
 
 const MAX_SIZE = 15 * 1024 * 1024; // 15 MB
 const ACCEPTED = [".pdf", ".csv", ".xlsx", ".xls"];
@@ -54,6 +55,7 @@ export function UploadDropzone({ onDone }: { onDone?: (added: number) => void })
           setJobs((prev) => prev.map((j) => (j.id === id && j.status === "parsing" && j.progress < 82 ? { ...j, progress: j.progress + 6 } : j)));
         }, 120);
 
+        let detectedCurrency: CurrencyCode | null = null;
         const serverParse = async (): Promise<Transaction[]> => {
           const fd = new FormData();
           fd.append("file", file);
@@ -63,7 +65,8 @@ export function UploadDropzone({ onDone }: { onDone?: (added: number) => void })
             const body = (await res.json().catch(() => null)) as { error?: string } | null;
             throw new Error(body?.error ?? `Server parse failed (${res.status})`);
           }
-          const body = (await res.json()) as { transactions: Transaction[] };
+          const body = (await res.json()) as { transactions: Transaction[]; currency?: CurrencyCode | null };
+          detectedCurrency = body.currency ?? null;
           return body.transactions;
         };
 
@@ -93,7 +96,7 @@ export function UploadDropzone({ onDone }: { onDone?: (added: number) => void })
           rowCount: txns.length,
           bankName: txns.find((t) => t.bankName)?.bankName ?? null,
         };
-        await addTransactions(txns, stmt, file);
+        await addTransactions(txns, stmt, file, detectedCurrency);
         patch(id, { status: "done", progress: 100, rows: txns.length });
         onDone?.(txns.length);
       } catch (err) {

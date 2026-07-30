@@ -8,6 +8,7 @@
  */
 import { enrich } from "@/lib/categorize";
 import type { Transaction } from "@/lib/types";
+import { CURRENCIES, type CurrencyCode } from "@/lib/currency";
 
 interface AiRow {
   date?: string;
@@ -22,7 +23,7 @@ interface AiRow {
 const SYSTEM = `You extract transactions from bank statements of ANY bank, ANY country, ANY layout (tables, text, scanned pages).
 
 Return ONLY a JSON object — no markdown, no commentary — shaped exactly:
-{"bankName": string|null, "accountNumber": string|null, "transactions": [{"date": "YYYY-MM-DD", "description": string, "debit": number|null, "credit": number|null, "balance": number|null}]}
+{"bankName": string|null, "accountNumber": string|null, "currency": ISO-4217 string|null, "transactions": [{"date": "YYYY-MM-DD", "description": string, "debit": number|null, "credit": number|null, "balance": number|null}]}
 
 Rules:
 - Every transaction row in the document must appear, in statement order. Skip headers, totals, opening/closing balance summary lines, marketing text.
@@ -36,7 +37,7 @@ Rules:
 export async function aiParse(
   file: { buffer: Buffer; mediaType: "application/pdf" | "text/plain"; text?: string },
   statementId: string
-): Promise<Transaction[] | null> {
+): Promise<{ rows: Transaction[]; currency: CurrencyCode | null } | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
@@ -86,7 +87,7 @@ export async function aiParse(
     .replace(/```$/, "")
     .trim();
 
-  let parsed: { bankName?: string | null; accountNumber?: string | null; transactions?: AiRow[] };
+  let parsed: { bankName?: string | null; accountNumber?: string | null; currency?: string | null; transactions?: AiRow[] };
   try {
     parsed = JSON.parse(raw);
   } catch {
@@ -129,5 +130,8 @@ export async function aiParse(
       })
     );
   }
-  return out;
+  const cur = parsed.currency && parsed.currency.toUpperCase() in CURRENCIES
+    ? (parsed.currency.toUpperCase() as CurrencyCode)
+    : null;
+  return { rows: out, currency: cur };
 }

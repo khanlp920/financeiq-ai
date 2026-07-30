@@ -17,6 +17,7 @@ import {
   pushBudget, pushStatement, pushTransactions,
 } from "@/lib/supabase/sync";
 import type { Budget, StatementFile, Transaction } from "@/lib/types";
+import { getCurrency, setCurrency as persistCurrency, type CurrencyCode } from "@/lib/currency";
 
 const LS_TXNS = "fiq.transactions.v1";
 const LS_BUDGETS = "fiq.budgets.v1";
@@ -30,16 +31,41 @@ interface FinanceStore {
   transactions: Transaction[];
   budgets: Budget[];
   statements: StatementFile[];
-  addTransactions: (txns: Transaction[], statement: StatementFile, file?: File) => Promise<void>;
+  addTransactions: (txns: Transaction[], statement: StatementFile, file?: File, detectedCurrency?: CurrencyCode | null) => Promise<void>;
   saveBudget: (b: Budget) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
   resetToDemo: () => void;
   clearAll: () => void;
   signOut: () => Promise<void>;
   applyDefaultBudgets: () => void;
+  currency: CurrencyCode;
+  setCurrency: (c: CurrencyCode) => void;
 }
 
 const Ctx = React.createContext<FinanceStore | null>(null);
+
+/**
+ * Defensive filter applied to every loaded/imported batch. Early parser
+ * versions could emit corrupt rows (reference numbers read as money); those
+ * may still live in localStorage or the cloud. Silently drop anything absurd.
+ */
+function sanitize(rows: Transaction[]): Transaction[] {
+  const seen = new Set<string>();
+  const out: Transaction[] = [];
+  for (const t of rows) {
+    if (!t || typeof t !== "object") continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t.date ?? "")) continue;
+    if (!t.description) continue;
+    const amt = Math.abs(t.amount);
+    if (!Number.isFinite(t.amount) || amt <= 0 || amt >= 1e9) continue;
+    if (t.balance != null && (!Number.isFinite(t.balance) || Math.abs(t.balance) >= 1e12)) t.balance = null;
+    const key = `${t.date}|${t.description}|${t.amount.toFixed(2)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
 
 function readLS<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -82,15 +108,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         if (user) {
           const [txns, buds] = await Promise.all([pullTransactions(user.id), pullBudgets(user.id)]);
           if (cancelled) return;
-          if (txns.length) {
-            setTransactions(txns); setBudgets(buds); setDemoMode(false);
+          const clean = sanitize(txns);
+          if (clean.length) {
+            setTransactions(clean); setBudgets(buds); setDemoMode(false);
           } else {
             setTransactions(generateDemoTransactions()); setBudgets(buds); setDemoMode(true);
           }
         } else {
-          const local = readLS<Transaction[]>(LS_TXNS);
-          if (local?.length) {
+          const local = sanitize(readLS<Transaction[]>(LS_TXNS) ?? []);
+          if (local.length) {
             setTransactions(local);
+            writeLS(LS_TXNS, local); // persist the cleaned set
             setBudgets(readLS<Budget[]>(LS_BUDGETS) ?? []);
             setStatements(readLS<StatementFile[]>(LS_STMTS) ?? []);
             setDemoMode(false);
@@ -107,8 +135,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [authReady, user]);
 
+  const [currency, setCurrencyState] = React.useState<CurrencyCode>(getCurrency());
+  const setCurrency = React.useCallback((c: CurrencyCode) => {
+    persistCurrency(c);
+    setCurrencyState(c);
+  }, []);
+
   const addTransactions = React.useCallback(
-    async (txns: Transaction[], statement: StatementFile, file?: File) => {
+    async (txns: Transaction[], statement: StatementFile, file?: File, detectedCurrency?: CurrencyCode | null) => {
+      txns = sanitize(txns);
+      if (detectedCurrency) setCurrency(detectedCurrency);
       setTransactions((prev) => {
         // de-dupe on (date, description, amount) against existing rows
         const seen = new Set(prev.map((t) => `${t.date}|${t.description}|${t.amount.toFixed(2)}`));
@@ -129,7 +165,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         await pushTransactions(user.id, txns);
       }
     },
-    [user, demoMode]
+    [user, demoMode, setCurrency]
   );
 
   const saveBudget = React.useCallback(async (b: Budget) => {
@@ -179,8 +215,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const value = React.useMemo<FinanceStore>(() => ({
     loading, demoMode, user, authReady, transactions, budgets, statements,
     addTransactions, saveBudget, deleteBudget, resetToDemo, clearAll, signOut, applyDefaultBudgets,
+    currency, setCurrency,
   }), [loading, demoMode, user, authReady, transactions, budgets, statements,
-       addTransactions, saveBudget, deleteBudget, resetToDemo, clearAll, signOut, applyDefaultBudgets]);
+       addTransactions, saveBudget, deleteBudget, resetToDemo, clearAll, signOut, applyDefaultBudgets,
+       currency, setCurrency]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
