@@ -1,0 +1,97 @@
+:root {
+  --font-sans: "Spline Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*  FinanceIQ AI — design tokens
+    Aesthetic: "midnight ledger" — deep ink surfaces, emerald signal color,
+    serif display accents, tabular numerals everywhere money appears.      */
+
+@layer base {
+  :root {
+    --background: 40 30% 98%;
+    --foreground: 222 45% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 45% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 45% 8%;
+    --primary: 160 84% 30%;
+    --primary-foreground: 150 60% 97%;
+    --secondary: 40 25% 93%;
+    --secondary-foreground: 222 45% 12%;
+    --muted: 40 20% 93%;
+    --muted-foreground: 222 15% 42%;
+    --accent: 160 60% 93%;
+    --accent-foreground: 160 84% 18%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 160 84% 32%;
+    --warning: 35 92% 44%;
+    --border: 222 20% 89%;
+    --input: 222 20% 86%;
+    --ring: 160 84% 30%;
+    --shadow: 222 45% 20%;
+    --radius: 1rem;
+    --chart-1: 160 84% 34%; --chart-2: 200 90% 42%; --chart-3: 35 92% 50%;
+    --chart-4: 262 60% 55%; --chart-5: 0 72% 55%;  --chart-6: 180 55% 40%;
+  }
+  .dark {
+    --background: 222 47% 5%;
+    --foreground: 40 30% 94%;
+    --card: 222 40% 8%;
+    --card-foreground: 40 30% 94%;
+    --popover: 222 40% 7%;
+    --popover-foreground: 40 30% 94%;
+    --primary: 158 74% 46%;
+    --primary-foreground: 160 90% 6%;
+    --secondary: 222 30% 12%;
+    --secondary-foreground: 40 30% 90%;
+    --muted: 222 30% 12%;
+    --muted-foreground: 222 12% 62%;
+    --accent: 160 45% 14%;
+    --accent-foreground: 158 74% 70%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 158 74% 46%;
+    --warning: 38 95% 56%;
+    --border: 222 28% 15%;
+    --input: 222 28% 18%;
+    --ring: 158 74% 46%;
+    --shadow: 222 80% 2%;
+    --chart-1: 158 74% 48%; --chart-2: 199 90% 55%; --chart-3: 38 95% 58%;
+    --chart-4: 262 70% 66%; --chart-5: 0 75% 62%;  --chart-6: 180 60% 50%;
+  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground antialiased; }
+  .tnum { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  /* Frosted panel used across the app */
+  .glass {
+    @apply rounded-lg border bg-card/70 shadow-glass backdrop-blur-xl;
+  }
+  .dark .glass { @apply bg-card/60; }
+
+  /* Ambient background mesh for auth + landing */
+  .mesh {
+    background:
+      radial-gradient(60rem 32rem at 12% -10%, hsl(var(--primary) / 0.16), transparent 60%),
+      radial-gradient(48rem 30rem at 105% 15%, hsl(199 90% 45% / 0.12), transparent 55%),
+      radial-gradient(40rem 26rem at 50% 115%, hsl(var(--primary) / 0.10), transparent 60%);
+  }
+  .grain::after {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; z-index: 60; opacity: .05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / .25); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
