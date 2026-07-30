@@ -54,12 +54,7 @@ export function UploadDropzone({ onDone }: { onDone?: (added: number) => void })
           setJobs((prev) => prev.map((j) => (j.id === id && j.status === "parsing" && j.progress < 82 ? { ...j, progress: j.progress + 6 } : j)));
         }, 120);
 
-        if (ext === ".csv") {
-          txns = await parseCsv(file, statementId);
-        } else if (ext === ".xlsx" || ext === ".xls") {
-          txns = await parseXlsx(file, statementId);
-        } else {
-          // PDF → server route (pdf-parse runs in Node)
+        const serverParse = async (): Promise<Transaction[]> => {
           const fd = new FormData();
           fd.append("file", file);
           fd.append("statementId", statementId);
@@ -69,12 +64,24 @@ export function UploadDropzone({ onDone }: { onDone?: (added: number) => void })
             throw new Error(body?.error ?? `Server parse failed (${res.status})`);
           }
           const body = (await res.json()) as { transactions: Transaction[] };
-          txns = body.transactions;
+          return body.transactions;
+        };
+
+        if (ext === ".csv") {
+          txns = await parseCsv(file, statementId).catch(() => []);
+          // Nonstandard export? Server route retries with the AI parser.
+          if (txns.length < 3) txns = await serverParse();
+        } else if (ext === ".xlsx" || ext === ".xls") {
+          txns = await parseXlsx(file, statementId).catch(() => []);
+          if (txns.length < 3) txns = await serverParse();
+        } else {
+          // PDF → always server-side (pdf-parse + AI fallback for any layout)
+          txns = await serverParse();
         }
         clearInterval(tick);
 
         if (!txns.length) {
-          patch(id, { status: "error", progress: 100, error: "No transactions detected. Check the file has Date/Description/Amount columns (see sample-data/)." });
+          patch(id, { status: "error", progress: 100, error: "No transactions detected in this file." });
           continue;
         }
 
